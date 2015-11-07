@@ -4,7 +4,7 @@
 
 - **Part I: word count**
     - 实现Map()和Reduce()函数，Map()返回包含Key/Value的list.List，Reduce()返回每个单词出现次数。
-- **Part II: Distributing MapReduce jobs**
+- **Part II: Distributing MapReduce jobs & Part III: Handling worker failures**
     - Example: test_test.go的TestBasic测试函数
     - setup() -> MakeMapReduce() -> InitMapReduce() -> StartRegistrationServer() -> Run() 注册RPC， 启动Master.
 
