@@ -1,9 +1,12 @@
 package pbservice
 
 const (
-	OK             = "OK"
-	ErrNoKey       = "ErrNoKey"
-	ErrWrongServer = "ErrWrongServer"
+	OK              = "OK"
+	ErrNoKey        = "ErrNoKey"
+	ErrEmptyKey     = "ErrEmptyKey"
+	ErrWrongServer  = "ErrWrongServer"
+	ErrBackupFaild  = "ErrBackupFaild"
+	ErrDuplicateKey = "ErrDuplicateKey"
 )
 
 type Err string
@@ -13,9 +16,9 @@ type PutAppendArgs struct {
 	Key   string
 	Value string
 	// You'll have to add definitions here.
-
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
+	UniqueID    string //the unique id
+	ForwardName string
+	Op          string
 }
 
 type PutAppendReply struct {
@@ -32,5 +35,12 @@ type GetReply struct {
 	Value string
 }
 
-
 // Your RPC definitions here.
+type SyncArgs struct {
+	KeyValue map[string]string
+	Primary  string
+}
+
+type SyncReply struct {
+	Err Err
+}

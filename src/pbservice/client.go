@@ -2,15 +2,18 @@ package pbservice
 
 import "viewservice"
 import "net/rpc"
-import "fmt"
+import "log"
+import "time"
 
 import "crypto/rand"
 import "math/big"
-
+import "strconv"
 
 type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
+	me   string
+	view viewservice.View
 }
 
 // this may come in handy.
@@ -25,10 +28,10 @@ func MakeClerk(vshost string, me string) *Clerk {
 	ck := new(Clerk)
 	ck.vs = viewservice.MakeClerk(me, vshost)
 	// Your ck.* initializations here
-
+	ck.me = me
+	ck.view = viewservice.View{0, "", ""}
 	return ck
 }
-
 
 //
 // call() sends an RPC to the rpcname handler on server srv
@@ -59,8 +62,8 @@ func call(srv string, rpcname string,
 	if err == nil {
 		return true
 	}
+	//fmt.Printf("call %s : %s failed, %s\n", srv, rpcname, err.Error())
 
-	fmt.Println(err)
 	return false
 }
 
@@ -74,8 +77,25 @@ func call(srv string, rpcname string,
 func (ck *Clerk) Get(key string) string {
 
 	// Your code here.
+	args := &GetArgs{key}
+	var reply GetReply
+	ok := false
 
-	return "???"
+	for !ok {
+		ok = call(ck.view.Primary, "PBServer.Get", args, &reply)
+		if !ok || reply.Err == ErrWrongServer {
+			time.Sleep(viewservice.PingInterval)
+			view, err := ck.vs.Ping(ck.view.Viewnum)
+			if err != nil {
+				//log.Printf("Client %s get view from viewservice failed\n", ck.me)
+				continue
+			}
+			ck.view = view
+			ok = false
+		}
+	}
+
+	return reply.Value
 }
 
 //
@@ -84,6 +104,22 @@ func (ck *Clerk) Get(key string) string {
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 
 	// Your code here.
+	args := &PutAppendArgs{key, value, strconv.FormatInt(nrand(), 10), ck.me, op}
+	var reply PutAppendReply
+
+	for ok := false; !ok; {
+		ok = call(ck.view.Primary, "PBServer.PutAppend", args, &reply)
+		if !ok || reply.Err == ErrWrongServer {
+			time.Sleep(viewservice.PingInterval)
+			view, err := ck.vs.Ping(ck.view.Viewnum)
+			if err != nil {
+				log.Printf("Client %s get view from viewservice failed\n", ck.me)
+				continue
+			}
+			ck.view = view
+			ok = false
+		}
+	}
 }
 
 //

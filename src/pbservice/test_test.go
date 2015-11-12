@@ -270,6 +270,8 @@ func TestFailPut(t *testing.T) {
 	fmt.Printf("Test: Put() immediately after backup failure ...\n")
 	s2.kill()
 	ck.Put("a", "aaa")
+	time.Sleep(time.Second) // wait for backup initializion
+	v1, _ = vck.Get()
 	check(ck, "a", "aaa")
 
 	for i := 0; i < viewservice.DeadPings*3; i++ {
