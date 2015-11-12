@@ -24,3 +24,9 @@
         - 当前View中只有Primary，当一个idle server发来ping时，Master会将这个idle server设为Backup。
     - server挂了之后又重启，Master如何得知：*When a server re-starts after a crash, it should send one or more Pings with an argument of zero to inform the view service that it crashed*
     - 修改viewservice/server.go，新增几个状态变量，用于确定Primary/Backup是否Ack过View，以及Ping是否超时。
+    
+- **Part B: The primary/backup key/value service**
+    - 可以用go内置类型map来保存"put"/"append"操作，但由于每个操作最多只能操作一下，因此还需要另外一个map来过滤同一个客户端提交的相同的操作；
+    - tick()函数每隔一定的周期ping一下viewservice，用于获取当前最新的view，如果发现当前的primary就是自己并且又有新的backup加入而且与自己先前知道的backup不同，那么这时候primary就需要和新加入的backup进行同步操作，调用SyncBackup()函数。
+    - 在PutAppend操作时，如果当前view的backup不为空，则需要将操作进行转发，转发过程中可能遇到网络延迟或者backup宕机，为了确保能够成功转发，需要一定的策略来判断。
+    
