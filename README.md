@@ -30,3 +30,43 @@
     - tick()函数每隔一定的周期ping一下viewservice，用于获取当前最新的view，如果发现当前的primary就是自己并且又有新的backup加入而且与自己先前知道的backup不同，那么这时候primary就需要和新加入的backup进行同步操作，调用SyncBackup()函数。
     - 在PutAppend操作时，如果当前view的backup不为空，则需要将操作进行转发，转发过程中可能遇到网络延迟或者backup宕机，为了确保能够成功转发，需要一定的策略来判断。
     
+### Lab3: Paxos-based Key/Value Service
+- **Part A: Paxos**
+    - 需理解Paxos算法的核心思想，分三个阶段：prepare阶段，server向其他server提交提案（pid, proposal_id）（包括自己），如果获得大多数server的认可，则进入accept阶段，当前server获得之前返回结果的最大值（最大值的定义可以参考文献，如果没有用自己的），提交提案（pid, proposal_id, max_value）之后如果获得大多数server的同意，则进入提案决定阶段，当前server将值发送给其余server。
+    
+    ```
+    proposer(v):
+        while not decided:
+            choose n, unique and higher than any n seen so far
+            send prepare(n) to all servers including self
+            if prepare_ok(n, n_a, v_a) from majority:
+                v' = v_a with highest n_a; choose own v otherwise
+                send accept(n, v') to all
+            if accept_ok(n) from majority:
+                send decided(v') to all
+
+    acceptor's state:
+        n_p (highest prepare seen)
+        n_a, v_a (highest accept seen)
+
+    acceptor's prepare(n) handler:
+    if n > n_p
+        n_p = n
+        reply prepare_ok(n, n_a, v_a)
+    else
+        reply prepare_reject
+
+    acceptor's accept(n, v) handler:
+        if n >= n_p
+           n_p = n
+           n_a = n
+           v_a = v
+           reply accept_ok(n)
+        else
+           reply accept_reject
+   
+    ```
+    
+- **Part B: Part B: Paxos-based Key/Value Server**
+
+    
