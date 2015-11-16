@@ -10,7 +10,10 @@ import "sync/atomic"
 import "os"
 import "syscall"
 import "encoding/gob"
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+)
 
 
 const Debug = 0
@@ -27,6 +30,10 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	Key string
+	Value string
+	Type string
+	Uid string
 }
 
 type KVPaxos struct {
@@ -38,17 +45,112 @@ type KVPaxos struct {
 	px         *paxos.Paxos
 
 	// Your definitions here.
+	key_value map[string]string
+	request map[string]int
+	seq int
+
+}
+
+
+//add new function
+//proposal the value, and wait until the value is decided
+func (kv *KVPaxos) proposalInstance(seq int, v interface{}) interface{} {
+	kv.px.Start(seq, v)
+	to := time.Millisecond * 10
+	for {
+		status, v := kv.px.Status(seq) //return the status and accepted_v, status = (Forgotten, Pending, Decided, Empty)
+		if status == paxos.Decided {
+			return v
+		}
+		time.Sleep(to)
+		if to < time.Second * 10 {
+			to *= 2
+		}
+	}
+	return ""
+}
+
+//add new function
+//sync with other servers
+//check status if kv.seq <= maxSeq
+func (kv *KVPaxos) synchronization(maxSeq int, uid string) {
+	for kv.seq <= maxSeq {
+		status, v := kv.px.Status(kv.seq)
+		if status == paxos.Empty {
+			kv.proposalInstance(kv.seq, Op{})
+			status, v = kv.px.Status(kv.seq)
+		}
+		to := time.Millisecond * 10
+		for {
+			if status == paxos.Decided {
+				var op Op = v.(Op)
+				if op.Type != "Get" {
+					if _, exist := kv.request[op.Uid]; !exist {
+						if op.Type == "Put" {
+							kv.key_value[op.Key] = op.Value
+						} else if op.Type == "Append" {
+							kv.key_value[op.Key] += op.Value
+						}
+						kv.request[op.Uid] = 1
+					}
+				}
+				break
+			}
+			time.Sleep(to)
+			if to < time.Second * 10 {
+				to *= 2
+			}
+			status, v = kv.px.Status(kv.seq)
+		}
+		kv.seq += 1
+	}
+	kv.px.Done(kv.seq - 1)
+}
+
+
+func (kv *KVPaxos) process(op Op) {
+	for {
+		maxSeq := kv.px.Max()
+		kv.synchronization(maxSeq, op.Uid) //wait for proposal_seq <= maxSeq
+		v := kv.proposalInstance(maxSeq + 1, op)
+		if v == op {
+			break
+		}
+	}
 }
 
 
 func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
+
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
+	if _, exist := kv.request[args.Uid]; !exist {
+		op := Op{Key:args.Key, Value:"", Type:"Get", Uid:args.Uid}
+		kv.process(op)
+	}
+
+	if _, exist := kv.key_value[args.Key]; exist {
+		reply.Value = kv.key_value[args.Key]
+		reply.Err = OK
+	} else {
+		reply.Err = ErrNoKey
+	}
 	return nil
 }
 
 func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	// Your code here.
 
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
+	if _, exist := kv.request[args.Uid]; !exist {
+		op := Op{Key:args.Key, Value:args.Value, Type:args.Op, Uid:args.Uid}
+		kv.process(op)
+	}
+	reply.Err = OK
 	return nil
 }
 
@@ -94,6 +196,10 @@ func StartServer(servers []string, me int) *KVPaxos {
 	kv.me = me
 
 	// Your initialization code here.
+	kv.key_value = make(map[string]string)
+	kv.request = make(map[string]int)
+	kv.seq = 0
+	//
 
 	rpcs := rpc.NewServer()
 	rpcs.Register(kv)

@@ -67,6 +67,7 @@
    
     ```
     
-- **Part B: Part B: Paxos-based Key/Value Server**
+- **Part B: Paxos-based Key/Value Server**
+
 
     

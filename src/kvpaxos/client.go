@@ -4,11 +4,15 @@ import "net/rpc"
 import "crypto/rand"
 import "math/big"
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 type Clerk struct {
 	servers []string
 	// You will have to modify this struct.
+	me string
 }
 
 func nrand() int64 {
@@ -22,6 +26,7 @@ func MakeClerk(servers []string) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
+	ck.me = strconv.FormatInt(nrand(), 10)
 	return ck
 }
 
@@ -66,6 +71,20 @@ func call(srv string, rpcname string,
 //
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
+	uid := ck.me + strconv.FormatInt(nrand(), 10)
+	index, len := 0, len(ck.servers)
+	for {
+		args := &GetArgs{Key:key, Uid:uid}
+		var reply GetReply
+		ok := call(ck.servers[index], "KVPaxos.Get", args, &reply)
+		if ok == false {
+			//log.Fatalf("KVPaxos.Get Failed.")
+			index = (index + 1) % len
+		} else {
+			return reply.Value
+		}
+
+	}
 	return ""
 }
 
@@ -74,6 +93,19 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
+	uid := ck.me + strconv.FormatInt(nrand(), 10)
+	index, len := 0, len(ck.servers)
+	for {
+		args := &PutAppendArgs{Key:key, Value:value, Op:op, Uid:uid}
+		var reply PutAppendReply
+		ok := call(ck.servers[index], "KVPaxos.PutAppend", args, &reply)
+		if ok == false {
+			//log.Fatalf("KVPaxos.PutAppend Failed.")
+			index = (index + 1) % len
+		} else {
+			break
+		}
+	}
 }
 
 func (ck *Clerk) Put(key string, value string) {
