@@ -66,8 +66,15 @@
            reply accept_reject
    
     ```
-    
+    - Start()函数用于提交一个序号为seq，价值为v的提案。
+    - Status()函数用于返回序号为seq的proposal最后返回的status以及被大多数server接受的value。
+    - Min()返回目前为止提交的proposal的最小序号
+    - Max()返回目前为止提交的proposal的最大序号
+    - Done()返回当前server已经接受序号为seq的提案。
 - **Part B: Paxos-based Key/Value Server**
+    - 判断at-most-once的思路和lab2差不多，就是用一个map[string]int来判重，通过在GetArgs以及PutAppendArgs结构体中增加一个唯一的Uid来区分。
+    - 关于同步的问题，每次Get或者PutAppend之前必须先同步所有server状态，对于当前接受请求的server，如果当前提交的请求序号小于所能看到的最大的序号，则说明该server没有达到最新的状态，此时需要等待server与别的server进行同步，通过proposalInstance函数获得提交序号为seq的value，然后更新自身server的状态。
+    
 
 
     
