@@ -70,6 +70,8 @@ func check(t *testing.T, groups []int64, ck *Clerk) {
 		if counts[g] < min {
 			min = counts[g]
 		}
+		//fmt.Println("count = " + strconv.FormatInt(int64(counts[g]), 10))
+
 	}
 	if max > min+1 {
 		t.Fatalf("max %v too much larger than min %v", max, min)

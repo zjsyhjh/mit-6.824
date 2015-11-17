@@ -8,6 +8,8 @@ package shardmaster
 import "net/rpc"
 import "time"
 import "fmt"
+import "crypto/rand"
+import "math/big"
 
 type Clerk struct {
 	servers []string // shardmaster replicas
@@ -117,4 +119,11 @@ func (ck *Clerk) Move(shard int, gid int64) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+func nrand() int64 {
+	max := big.NewInt(int64(1) << 62)
+	bigx, _ := rand.Int(rand.Reader, max)
+	x := bigx.Int64()
+	return x
 }

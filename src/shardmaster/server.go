@@ -11,7 +11,11 @@ import "sync/atomic"
 import "os"
 import "syscall"
 import "encoding/gob"
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+	"math"
+)
 
 type ShardMaster struct {
 	mu         sync.Mutex
@@ -22,37 +26,260 @@ type ShardMaster struct {
 	px         *paxos.Paxos
 
 	configs []Config // indexed by config num
+	processid int
+	cfnum int
 }
 
 
 type Op struct {
 	// Your data here.
+	Type string //"Join", "Leave", "Move", "Query"
+	GID int64
+	Servers []string
+	Shard int
+	Num int
+	Uid int64
 }
+
+
+//add new function
+//proposal a new instance
+func (sm *ShardMaster) proposalInstance(seq int, v interface{}) Op {
+	sm.px.Start(seq, v)
+	to := time.Millisecond * 10
+	for {
+		status, value := sm.px.Status(seq)
+		if status == paxos.Decided {
+			return value.(Op)
+		}
+		time.Sleep(to)
+		if to < time.Second * 10 {
+			to *= 2
+		}
+	}
+	return Op{}
+}
+
+//get the index of maximum config.Groups
+func (sm *ShardMaster) getMaxGidCounts(config *Config) int64 {
+	counts := make(map[int64]int)
+	max_gid, max_count := int64(0), -1
+	for gid := range config.Groups {
+		counts[gid] = 0
+	}
+	for _, gid := range config.Shards {
+		counts[gid]++
+	}
+
+	for gid := range counts {
+		if _, exist := config.Groups[gid]; exist {
+			if counts[gid] > max_count {
+				max_count, max_gid = counts[gid], gid
+			}
+		}
+	}
+	for _, gid := range config.Shards {
+		if gid == 0 {
+			max_gid = 0
+			break
+		}
+	}
+	return max_gid
+}
+
+//get the index of minimum config.Groups
+func (sm *ShardMaster) getMinGidCounts(config *Config) int64 {
+	counts := make(map[int64]int)
+	min_gid, min_count := int64(0), math.MaxInt32
+	for gid := range config.Groups {
+		counts[gid] = 0
+	}
+	for _, gid := range config.Shards {
+		counts[gid]++
+	}
+
+	for gid := range counts {
+		if _, exist := config.Groups[gid]; exist {
+			if counts[gid] < min_count {
+				min_count, min_gid = counts[gid], gid
+			}
+		}
+	}
+	return min_gid
+}
+
+
+//return shard_id if the Shard[index] equals to the parameter(gid)
+func (sm *ShardMaster) getShardByGid(gid int64, config *Config) int {
+	for sid, g := range config.Shards {
+		if g == gid {
+			return sid
+		}
+	}
+	return -1
+}
+
+
+//add new function
+//rebalance load
+func (sm *ShardMaster) rebalanceAfterJoin(gid int64) {
+	config := &sm.configs[sm.cfnum]
+	count := 0
+	for {
+		if NShards / len(config.Groups) == count {
+			break
+		}
+		max_gid := sm.getMaxGidCounts(config)
+		sid := sm.getShardByGid(max_gid, config)
+		config.Shards[sid] = gid
+
+		count += 1
+	}
+}
+
+func (sm *ShardMaster) rebalanceAfterLeave(gid int64) {
+	config := &sm.configs[sm.cfnum]
+	for {
+		min_gid := sm.getMinGidCounts(config)
+		sid := sm.getShardByGid(gid, config)
+		if sid == -1 {
+			break
+		}
+		config.Shards[sid] = min_gid
+	}
+}
+
+//add new function
+func (sm *ShardMaster) nextConfig() *Config {
+	old := &sm.configs[sm.cfnum]
+	var config Config
+	config.Num = old.Num + 1
+	config.Shards = [NShards]int64{}
+	config.Groups = make(map[int64][]string)
+	for gid, servers := range old.Groups {
+		config.Groups[gid] = servers
+	}
+	for index, gid := range old.Shards {
+		config.Shards[index] = gid
+	}
+	sm.configs = append(sm.configs, config)
+	sm.cfnum += 1
+	return &sm.configs[sm.cfnum]
+}
+
+func (sm *ShardMaster) applyJoin(gid int64, servers []string) {
+	config := sm.nextConfig()
+	if _, exist := config.Groups[gid]; !exist {
+		config.Groups[gid] = servers
+		sm.rebalanceAfterJoin(gid)
+	}
+}
+
+func (sm *ShardMaster) applyLeave(gid int64) {
+	config := sm.nextConfig()
+	if _, exist := config.Groups[gid]; exist {
+		delete(config.Groups, gid)
+		sm.rebalanceAfterLeave(gid)
+	}
+}
+
+func (sm *ShardMaster) applyMove(gid int64, sid int) {
+	config := sm.nextConfig()
+	config.Shards[sid] = gid
+}
+
+func (sm *ShardMaster) applyQuery(num int) Config {
+	if num == -1 {
+		sm.checkValid(sm.configs[sm.cfnum])
+		return sm.configs[sm.cfnum]
+	} else {
+		return sm.configs[num]
+	}
+}
+
+func (sm *ShardMaster) checkValid(config Config) {
+	if len(config.Groups) > 0 {
+		for _, gid := range config.Shards {
+			if _, ok := config.Groups[gid]; !ok {
+				fmt.Println("Unallocated Shard")
+				os.Exit(-1)
+			}
+		}
+	}
+}
+
+//add apply function
+func (sm *ShardMaster) apply(seq int, op Op) Config {
+	sm.processid += 1
+	switch op.Type {
+	case "Join":
+		sm.applyJoin(op.GID, op.Servers)
+	case "Leave":
+		sm.applyLeave(op.GID)
+	case "Move":
+		sm.applyMove(op.GID, op.Shard)
+	case "Query":
+		return sm.applyQuery(op.Num)
+	default:
+		fmt.Println("No such operate type.")
+	}
+	sm.px.Done(sm.processid)
+	return Config{}
+}
+
+//add new function
+//process the operation from client
+func (sm *ShardMaster) process(op Op) Config {
+	op.Uid = nrand()
+	for {
+		curSeq := sm.processid + 1
+		v := sm.proposalInstance(curSeq, op)
+		config := sm.apply(curSeq, v)
+		if v.Uid == op.Uid {
+			return config
+		}
+	}
+}
+
 
 
 func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
 	// Your code here.
-
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	op := Op{Type:"Join", GID:args.GID, Servers:args.Servers}
+	sm.process(op)
 	return nil
 }
 
 func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
 	// Your code here.
-
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	op := Op{Type:"Leave", GID:args.GID}
+	sm.process(op)
 	return nil
 }
 
 func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
 	// Your code here.
-
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	op := Op{Type:"Move", GID:args.GID, Shard:args.Shard}
+	sm.process(op)
 	return nil
 }
 
 func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
 	// Your code here.
-
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	op := Op{Type:"Query", Num:args.Num}
+	reply.Config = sm.process(op)
 	return nil
 }
+
+
 
 // please don't change these two functions.
 func (sm *ShardMaster) Kill() {
@@ -90,7 +317,9 @@ func StartServer(servers []string, me int) *ShardMaster {
 	sm.me = me
 
 	sm.configs = make([]Config, 1)
-	sm.configs[0].Groups = map[int64][]string{}
+	sm.configs[0].Groups = make(map[int64][]string)
+	sm.cfnum = 0
+	sm.processid = 0
 
 	rpcs := rpc.NewServer()
 
