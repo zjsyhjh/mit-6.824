@@ -74,6 +74,11 @@
 - **Part B: Paxos-based Key/Value Server**
     - 判断at-most-once的思路和lab2差不多，就是用一个map[string]int来判重，通过在GetArgs以及PutAppendArgs结构体中增加一个唯一的Uid来区分。
     - 关于同步的问题，每次Get或者PutAppend之前必须先同步所有server状态，对于当前接受请求的server，如果当前提交的请求序号小于所能看到的最大的序号，则说明该server没有达到最新的状态，此时需要等待server与别的server进行同步，通过proposalInstance函数获得提交序号为seq的value，然后更新自身server的状态。
+ 
+### Lab4: Sharded Key/Value Service    
+- **Part A: The Shard Master**
+    - 主要难点在于如何让每个group分到的shard数目均匀（差值不超过1），可以这样做：对于join操作，每次都找shard最多的那个group，然后分一个shard给新加入的group，反复操作直到达到平均水平；对于leave操作，每次找shard最少的那个group（需要注意的是这个group不能是要丢弃的group）,然后将要丢弃的group中的shard重新分配给这个最少shard的group，如此反复直到要丢弃的group中的shard被分完。
+    
     
 
 
