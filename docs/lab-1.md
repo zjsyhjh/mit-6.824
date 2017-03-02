@@ -285,47 +285,48 @@
       // Read map outputs for partition job, sort them by key, call reduce for each
       // key
       func DoReduce(job int, fileName string, nmap int,
-      	Reduce func(string, *list.List) string) {
-      	kvs := make(map[string]*list.List)
-      	for i := 0; i < nmap; i++ {
-      		name := ReduceName(fileName, i, job)
-      		fmt.Printf("DoReduce: read %s\n", name)
-      		file, err := os.Open(name)
-      		if err != nil {
-      			log.Fatal("DoReduce: ", err)
-      		}
-      		dec := json.NewDecoder(file)
-      		for {
-      			var kv KeyValue
-      			err = dec.Decode(&kv)
-      			if err != nil {
-      				break
-      			}
-      			_, ok := kvs[kv.Key]
-      			if !ok {
-      				kvs[kv.Key] = list.New()
-      			}
-      			kvs[kv.Key].PushBack(kv.Value)
-      		}
-      		file.Close()
-      	}
-      	var keys []string
-      	for k := range kvs {
-      		keys = append(keys, k)
-      	}
-      	sort.Strings(keys)
-      	p := MergeName(fileName, job)
-      	file, err := os.Create(p)
-      	if err != nil {
-      		log.Fatal("DoReduce: create ", err)
-      	}
-      	enc := json.NewEncoder(file)
-      	for _, k := range keys {
-      		res := Reduce(k, kvs[k])
-      		enc.Encode(KeyValue{k, res})
-      	}
-      	file.Close()
-      }
+        	Reduce func(string, *list.List) string) {
+        	kvs := make(map[string]*list.List)
+        	for i := 0; i < nmap; i++ {
+        		name := ReduceName(fileName, i, job)
+        		fmt.Printf("DoReduce: read %s\n", name)
+        		file, err := os.Open(name)
+        		if err != nil {
+        			log.Fatal("DoReduce: ", err)
+        		}
+        		dec := json.NewDecoder(file)
+        		for {
+        			var kv KeyValue
+        			err = dec.Decode(&kv)
+        			if err != nil {
+        				break
+        			}
+        			_, ok := kvs[kv.Key]
+        			if !ok {
+        				kvs[kv.Key] = list.New()
+        			}
+        			kvs[kv.Key].PushBack(kv.Value)
+        		}
+        		file.Close()
+        	}
+        	var keys []string
+        	for k := range kvs {
+        		keys = append(keys, k)
+        	}
+        	sort.Strings(keys)
+        	p := MergeName(fileName, job)
+        	file, err := os.Create(p)
+        	if err != nil {
+        		log.Fatal("DoReduce: create ", err)
+        	}
+        	enc := json.NewEncoder(file)
+        	for _, k := range keys {
+        		res := Reduce(k, kvs[k])
+        		enc.Encode(KeyValue{k, res})
+        	}
+        	file.Close()
+        }
       ```
 
-  - 最后对所有的Reduce槽结果进行合并排序，统计出现次数最多的单词。
+
+- 最后对所有的Reduce槽结果进行合并排序，统计出现次数最多的单词。
