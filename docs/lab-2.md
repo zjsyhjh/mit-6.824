@@ -7,10 +7,17 @@
     - ViewServer存在单点失败
   - 系统运行方式：Clerk每隔一个PingInterval向ViewServer发送一个Ping，告知ViewServer自己还“活着”，同时ViewServer根据自己所能看到的系统当前状态，将Clerk标记为primary或backup或者不做任何处理，并且决定是否更新View，同时回复Ping它的Clerk最新的View。
     - 什么时候需要更新View？系统引入了一个机制（Primary Acknowledgement），即ViewServer向primary回复了当前最新的View(i)，在下一次Ping中，primary就会携带相应的信息证明已经知道了这个View(i)的存在，当ViewServer收到了Ping之后，就能够确认primary已经知道了这个View(i)的存在，从而能够决定是否需要根据当前的状态更新View，可以从以下几个方面来考虑是否需要更新View
+
+      ​
+
       > - primary挂了
       > - backup挂了
       > - 当前View中只有primary，当一个idle server发来ping时，ViewServer会将这个idle server设为backup
+
+      ​
+
     - ViewServer如何判断某个server是挂了之后重启的？
+
       - 当某个server挂了之后重启，它给ViewServer发送Ping时会额外携带一个参数0来表明它曾经挂过。
 
 - 代码分析
