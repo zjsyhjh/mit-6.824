@@ -24,7 +24,7 @@
 
 - 伪代码：
 
-  - ```c
+  ```c
     proposer(v):
       while not decided:
         choose n, unique and higher than any n seen so far
