@@ -7,9 +7,9 @@
     - ViewServer存在单点失败
   - 系统运行方式：Clerk每隔一个PingInterval向ViewServer发送一个Ping，告知ViewServer自己还“活着”，同时ViewServer根据自己所能看到的系统当前状态，将Clerk标记为primary或backup或者不做任何处理，并且决定是否更新View，同时回复Ping它的Clerk最新的View。
     - 什么时候需要更新View？系统引入了一个机制（Primary Acknowledgement），即ViewServer向primary回复了当前最新的View(i)，在下一次Ping中，primary就会携带相应的信息证明已经知道了这个View(i)的存在，当ViewServer收到了Ping之后，就能够确认primary已经知道了这个View(i)的存在，从而能够决定是否需要根据当前的状态更新View，可以从以下几个方面来考虑是否需要更新View
-      - primary挂了
-      - backup挂了
-      - 当前View中只有primary，当一个idle server发来ping时，ViewServer会将这个idle server设为backup
+      > - primary挂了
+      > - backup挂了
+      > - 当前View中只有primary，当一个idle server发来ping时，ViewServer会将这个idle server设为backup
     - ViewServer如何判断某个server是挂了之后重启的？
       - 当某个server挂了之后重启，它给ViewServer发送Ping时会额外携带一个参数0来表明它曾经挂过。
 
@@ -71,16 +71,20 @@
 
   - clerk通过Ping(viewnum)远程调用向VeiwServer询问最新的View，当ViewServer收到Ping时，根据以下几种情况判断：
 
-    - 如果系统当前的primary还没有确定，并且ViewServer中存储的viewnum为0，则说明系统刚启动，那么将当前发送Ping的clerk设为primary，并且更新系统的viewnum（viewnum = viewnum + 1)
+    ​
 
-    - 如果当前的primary存在并且刚好就是发送ping的clerk，又可以分为两种情况
+    > - 如果系统当前的primary还没有确定，并且ViewServer中存储的viewnum为0，则说明系统刚启动，那么将当前发送Ping的clerk设为primary，并且更新系统的viewnum（viewnum = viewnum + 1)
+    >
+    > - 如果当前的primary存在并且刚好就是发送ping的clerk，又可以分为两种情况
+    >
+    >   > - 如果此时clerk的viewnum为0，则说明是挂了之后又重启的，那么系统应该进入下一个View，如果存在backup，则将backup提升为primary
+    >   > - 否则就告诉ViewServer，primary已经知道了这个View的存在
+    >
+    > - 如果当前的backup为空，并且primary已经知道了最新View的存在，那么直接设置clerk为backup，并且更新View
+    >
+    > - 如果当前的backup就是这个发送Ping的clerk，如果这个clerk是挂了之后重启的，并且Primary已经获知了最新的ViewServer的状态，那么更新View
 
-      - 如果此时clerk的viewnum为0，则说明是挂了之后又重启的，那么系统应该进入下一个View，如果存在backup，则将backup提升为primary
-      - 否则就告诉ViewServer，primary已经知道了这个View的存在
-
-    - 如果当前的backup为空，并且primary已经知道了最新View的存在，那么直接设置clerk为backup，并且更新View
-
-    - 如果当前的backup就是这个发送Ping的clerk，如果这个clerk是挂了之后重启的，并且Primary已经获知了最新的ViewServer的状态，那么更新View
+    ​
 
     - ```go
       func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
