@@ -56,12 +56,11 @@
         reply accept_reject
     ```
 
-
-
+  ​
 
 - 基于Paxos的Key/Value服务
-
   - 判断at-most-once的思路和之前Lab2差不多，就是用一个map[string]int来判重，通过GetArgs以及PutAppendArgs结构体中增加一个唯一的Uid来区分
   - 关于同步的问题，每天Get或者PutAppend之前必须先同步所有server的状态，对于当前接受请求的server，如果当前提交的请求序号小于所能看到的最大序号，则说明公开server没有达到最新的状态，此时需要等待server与别的server进行同步，通过proposalInstance函数获得提交序号为seq的value，然后更新自身server的状态
 
-  ​
+
+​
